@@ -56,7 +56,7 @@ def unpack(self, data):
 
 我首先初始化了一个`bytearray`对象`data`来存储返回值，然后使用`extend`方法将`original_name`添加到`data`中，因为查询类型和查询类别紧跟在域名段后且均占两个字节，所以可以直接使用`struct.pack('>HH', self.type, self.classify)`将这两个字段添加到报文中。
 
-代码如下：
+`pack`的代码如下：
 
 ```python
 def pack(self):
@@ -74,3 +74,156 @@ def pack(self):
 
 `message`类表示查询报文，`r_pack`方法用于根据ip资源和当前查询报文内容生成回复报文。
 
+DNS报文的格式如下：
+
+![DNS](figs/DNS.png)
+
+其中`Identification`，`Questions`，`Authority RRs`，`Additional RRs`等字段都保持与查询报文相同即可。
+
+`Authority RRs`直接设为1即可。
+
+头部标志字段的定义如下：
+
+![flags](figs/flags.png)
+
+在本地域名解析器构造的回复报文中，`QR = 1`，`Opcode = 0`，`AA = 0`，`TC = 0`，`RD = 1`，`RA = 1`，`Z = 0`，请求域名为`0.0.0.0`时，`rcode = 3`，否则`rcode = 1`。所以可以得到`flags`的设置应如下：
+
+```python
+flags = 0x8183 if ip == '0.0.0.0' else 0x8180
+```
+
+此时，可以将头部和问题节打包添加至回复报文中。然后需要设置答复节。
+
+答复节报文格式如下：
+
+![answer](figs/answer.png)
+
+其中域名段用指针指向问题节的域名以减小报文。因为问题节报文前面有12个字节的头部内容，并且用指针指向域名时要求前两位为1，所以指针应为`0xc00c`。查询类型和查询类别字段与问题节保持一致即可。然后再设置`TTL = 200`和`Rdatalength = 4`。最后将答复节的内容依次打包添加至回复报文中再返回回复报文即可。
+
+`r_pack`的代码如下：
+
+```python
+def r_pack(self, ip):
+        """
+        TODO: 根据ip资源和当前查询报文内容生成回复报文，注意哪些头部字段要修改
+        """
+        # 头部
+        data = struct.pack('>H', self.id)
+        # flags = self.flags | 0x8083 if ip == '0.0.0.0' else self.flags | 0x8081
+        flags = 0x8183 if ip == '0.0.0.0' else 0x8180
+        data += struct.pack('>HHHHH', flags, self.quests, 1, self.author, self.addition)
+        # 问题节
+        data += self.query.pack()
+        # 答复节
+        name = 0xc00c  # 指针，指向问题节的域名段
+        ttl = 200  # 生存时间
+        length = 4  # 数据长度
+        data += struct.pack('>HHHLH', name, self.query.type, self.query.classify, ttl, length)
+        ips = ip.split('.')
+        data += struct.pack('BBBB', int(ips[0]), int(ips[1]), int(ips[2]), int(ips[3]))
+        return data
+```
+
+### relay_server
+
+`relay_server`表示中继器，用于接收并处理DNS报文，`process`方法用于处理报文。
+
+在开始处理前首先使用`time`方法获取当前时间以用于后面计算处理时长，然后实例化一个`message`的对象`m`用于答复。
+
+如果`m.qr == 0`，则说明接收的报文是查询报文。
+
+* 如果`m.id`在配置文件中，则先提取出查询域名对应的`ip`，然后调用`m`的`r_pack`方法生成回复报文，发送给请求方，并且记录处理时间，然后打印相关信息。如果`ip == 0.0.0.0`，那么会进行拦截，此时需要打印处理方式为`intercept`，否则打印处理方式为`local resolve`，此外还有其他信息需要打印，详见后面的代码。
+
+* 如果`m.id`不在配置文件中，则先存储查询域名，请求方地址和开始时间在`self.transaction[m.id]`中以供后续使用。然后将查询报文转发给公共DNS服务器。
+
+如果`m.qr != 0`，则说明接收的报文是回复报文。首先从`self.transaction[m.id]`中提取出域名，请求方地址，和处理开始时间，然后将回复报文转发给请求方，计算处理时间，最后再打印相关信息。
+
+`process`方法的代码如下：
+
+```python
+def process(self, data, addr):
+        """报文处理"""
+        start_time = time()
+        m = message(data)
+        # TODO: 解析收到的报文，生成回复返回给请求方
+        # 如果是查询报文，检查是否在配置文件中，若在则返回配置文件中的ip，否则转发给公共DNS服务器
+        if m.qr == 0:
+            # 是查询报文
+            name = m.query.name
+            if name in self.config:
+                # 在配置文件中
+                ip = self.config[name]
+                ans = m.r_pack(ip)
+                self.s.sendto(ans, addr)
+                res_time = time() - start_time
+                if ip == '0.0.0.0':
+                    print(f'query to {name}, handled as intercepted, takes {res_time:.4f}s')
+                else:
+                    print(f'query to {name}, handled as local resolve, takes {res_time:.4f}s')
+            else:
+                # 不在配置文件中，中继
+                self.transaction[m.id] = (name, addr, start_time)  # 存储域名，请求端地址，开始时间
+                self.s.sendto(data, self.nameserver)  # 转发给公共DNS服务器
+        else:
+            # 是回复报文
+            if m.id in self.transaction:
+                name, destination, start_time = self.transaction[m.id]
+                del self.transaction[m.id]
+                self.s.sendto(data, destination)
+                res_time = time() - start_time
+                print(f'query to {name}, handled as relay, takes {res_time:.4f}s')
+```
+
+## 实验结果
+
+### nslookup测试
+
+test1：
+
+nslookup结果如下：
+
+![ans1](figs/ans1.png)
+
+程序输出如下：
+
+![info1](figs/info1.png)
+
+test2：
+
+nslookup结果如下：
+
+![ans2](figs/ans2.png)
+
+程序输出如下：
+
+![info2](figs/info2.png)
+
+test3：
+
+nslookup结果如下：
+
+![ans3](figs/ans3.png)
+
+程序输出如下：
+
+![info3](figs/info3.png)
+
+### 浏览器测试
+
+正常访问知乎`www.zhihu.com`时，会出现下面的图片：
+
+![zhihu3](figs/zhihu3.png)
+
+![zhihu4](figs/zhihu4.png)
+
+运行中继器后，再访问知乎，上面的图片不再出现，如下图：
+
+![zhihu1](figs/zhihu1.png)
+
+![zhihu2](figs/zhihu2.png)
+
+程序输出中与访问图片相关的内容如下：
+
+![zhihu_output](figs/zhihu_output.png)
+
+以上结果均符合预期。

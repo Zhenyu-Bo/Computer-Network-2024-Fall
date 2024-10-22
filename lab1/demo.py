@@ -120,13 +120,14 @@ class relay_server():
                 self.transaction[m.id] = (name, addr, start_time)  # 存储域名，请求端地址，开始时间
                 self.s.sendto(data, self.nameserver)  # 转发给公共DNS服务器
         else:
-            # 是响应报文
+            # 是回复报文
             if m.id in self.transaction:
                 name, destination, start_time = self.transaction[m.id]
+                del self.transaction[m.id]
                 self.s.sendto(data, destination)
                 res_time = time() - start_time
                 print(f'query to {name}, handled as relay, takes {res_time:.4f}s')
-                del self.transaction[m.id]
+                # del self.transaction[m.id]
 
     def run(self):
         """循环接收DNS报文"""
