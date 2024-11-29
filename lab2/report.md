@@ -269,21 +269,21 @@ sacp = false;
 
 ##### 吞吐量
 
-![new_reno](C:\Users\bzy\Desktop\计算机\计算机网络\实验\ns3 lab\figs\1_new_reno_throughput.png)
+![new_reno](figs\1_new_reno_throughput.png)
 
 ##### RTT
 
-![new_reno](C:\Users\bzy\Desktop\计算机\计算机网络\实验\ns3 lab\figs\1_new_reno_rtt.png)
+![new_reno](figs\1_new_reno_rtt.png)
 
 #### TcpVegas
 
 ##### 吞吐量
 
-![vegas](C:\Users\bzy\Desktop\计算机\计算机网络\实验\ns3 lab\figs\1_vegas_throughput.png)
+![vegas](figs\1_vegas_throughput.png)
 
 ##### RTT
 
-![vegas](C:\Users\bzy\Desktop\计算机\计算机网络\实验\ns3 lab\figs\1_vegas_rtt.png)
+![vegas](figs\1_vegas_rtt.png)
 
 ### 结果分析
 
@@ -432,11 +432,11 @@ for (uint16_t i = 0; i < sources.GetN (); i++)
 观察`Node2`上的两个流的平均吞吐量可得带宽的分配情况，两个拥塞控制算法对应的Tcp流的平均吞吐量如下：
 
 **TcpNewReno：**
-![2_reno](C:\Users\bzy\Desktop\计算机\计算机网络\实验\ns3 lab\figs\2_new_reno.png)
+![2_reno](figs\2_new_reno.png)
 
 **TcpVegas：**
 
-![2_vegas](C:\Users\bzy\Desktop\计算机\计算机网络\实验\ns3 lab\figs\2_vegas.png)
+![2_vegas](figs\2_vegas.png)
 
 ### 结果分析
 
