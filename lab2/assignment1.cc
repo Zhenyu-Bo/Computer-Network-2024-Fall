@@ -232,19 +232,21 @@ int main (int argc, char *argv[])
 
   // 修改配置
   // 修改传输协议
-  bool is_newreno = false; // 标志使用TcpNewReno还是TcpVegas
+  bool is_newreno = true; // 标志使用TcpNewReno还是TcpVegas
   transport_prot = is_newreno ? "TcpNewReno" : "TcpVegas";
   // 修改接入链路和瓶颈链路的带宽和延迟
   bandwidth = "3Mbps";
   delay = "1ms";
   access_bandwidth = "15Mbps";
   access_delay = "1ms";
-  // 这里在输出文件前缀加上传输协议，以区分不同协议的输出文件
+  // 这里在输出文件前缀加上传输协议，以区分使用不同拥塞控制算法生成的文件
   prefix_file_name = "TcpVariantsComparison_" + transport_prot; // 输出文件前缀
   // 设置持续时间为50s
   duration = 50.0;
   // 启用pcap抓包
   pcap = true;
+  // 关闭sack
+  sack = false;
 
 
   CommandLine cmd (__FILE__);
@@ -318,7 +320,6 @@ int main (int argc, char *argv[])
       TypeId tcpTid;
       NS_ABORT_MSG_UNLESS (TypeId::LookupByNameFailSafe (transport_prot, &tcpTid), "TypeId " << transport_prot << " not found");
       Config::SetDefault ("ns3::TcpL4Protocol::SocketType", TypeIdValue (TypeId::LookupByName (transport_prot)));
-      // Config::SetDefault("ns3::TcpL4Protocol::RecoveryType", tcpTid.GetName());
     }
 
   // Create gateways, sources, and sinks
@@ -328,6 +329,10 @@ int main (int argc, char *argv[])
   sources.Create (num_flows);
   NodeContainer sinks;
   sinks.Create (num_flows);
+  // print node id
+  // std::cout << "node0: " << sources.Get(0)->GetId() << std::endl;  node0: 1
+  // std::cout << "node1: " << gateways.Get(0)->GetId() << std::endl; node1: 0
+  // std::cout << "node2: " << sinks.Get(0)->GetId() << std::endl;    node2: 2
 
   // Configure the error model
   // Here we use RateErrorModel with packet error rate

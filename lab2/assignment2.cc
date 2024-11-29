@@ -50,6 +50,7 @@
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
+#include "ns3/point-to-point-helper.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/error-model.h"
@@ -246,7 +247,7 @@ int main (int argc, char *argv[])
   access_bandwidth = "20Mbps";
   access_delay = "1ms";
   pcap = true;
-  duration = 50.0;
+  sack = false;
   num_flows = 2;
 
 
@@ -333,6 +334,14 @@ int main (int argc, char *argv[])
   sources.Create (num_flows);
   NodeContainer sinks;
   sinks.Create (num_flows);
+  // 打印node的id
+  // std::cout << "node0: " << sources.Get(0)->GetId() << std::endl;  node0: 2
+  // std::cout << "node1: " << sources.Get(1)->GetId() << std::endl;  node1: 3
+  // std::cout << "node2: " << gateways.Get(0)->GetId() << std::endl; node2: 0
+  // std::cout << "node3: " << gateways.Get(1)->GetId() << std::endl; node3: 1
+  // std::cout << "node4: " << sinks.Get(0)->GetId() << std::endl;    node4: 4
+  // std::cout << "node5: " << sinks.Get(1)->GetId() << std::endl;    node5: 5
+
 
   // Configure the error model
   // Here we use RateErrorModel with packet error rate
@@ -348,13 +357,20 @@ int main (int argc, char *argv[])
   UnReLink.SetChannelAttribute ("Delay", StringValue (delay));
   UnReLink.SetDeviceAttribute ("ReceiveErrorModel", PointerValue (&error_model));
 
+  // PointToPointHelper GatewayLink;
+  // GatewayLink.SetDeviceAttribute ("DataRate", StringValue (bandwidth));
+  // GatewayLink.SetChannelAttribute ("Delay", StringValue (delay));
+  // GatewayLink.SetDeviceAttribute ("ReceiveErrorModel", PointerValue (&error_model));
 
   InternetStackHelper stack;
   stack.InstallAll ();
 
   // 设置发送节点的拥塞控制算法
-  Config::Set ("/NodeList/0/$ns3::TcpL4Protocol/SocketType", TypeIdValue (TcpNewReno::GetTypeId ()));
-  Config::Set ("/NodeList/1/$ns3::TcpL4Protocol/SocketType", TypeIdValue (TcpVegas::GetTypeId ()));
+  TypeId tcpTid;
+  NS_ABORT_MSG_UNLESS (TypeId::LookupByNameFailSafe (transport_prot_0, &tcpTid), "TypeId " << transport_prot_0 << " not found");
+  Config::Set ("/NodeList/"+ std::to_string(sources.Get(0)->GetId()) +"/$ns3::TcpL4Protocol/SocketType", TypeIdValue (TcpNewReno::GetTypeId ()));
+  NS_ABORT_MSG_UNLESS (TypeId::LookupByNameFailSafe (transport_prot_1, &tcpTid), "TypeId " << transport_prot_1 << " not found");
+  Config::Set ("/NodeList/"+ std::to_string(sources.Get(1)->GetId()) +"/$ns3::TcpL4Protocol/SocketType", TypeIdValue (TcpVegas::GetTypeId ()));
 
   TrafficControlHelper tchPfifo;
   tchPfifo.SetRootQueueDisc ("ns3::PfifoFastQueueDisc");
@@ -411,13 +427,16 @@ int main (int argc, char *argv[])
   // 第一个网关节点到第二个网关节点
   NetDeviceContainer devices;
   devices = UnReLink.Install (gateways.Get (0), gateways.Get (1));
-  if (queue_disc_type.compare ("ns3::PfifoFastQueueDisc") == 0) {
-      tchPfifo.Install (devices);
-  } else if (queue_disc_type.compare ("ns3::CoDelQueueDisc") == 0) {
-      tchCoDel.Install (devices);
-  } else {
-      NS_FATAL_ERROR ("Queue not recognized. Allowed values are ns3::CoDelQueueDisc or ns3::PfifoFastQueueDisc");
-  }
+  address.NewNetwork();
+  Ipv4InterfaceContainer interfaces = address.Assign (devices);
+  // if (queue_disc_type.compare ("ns3::PfifoFastQueueDisc") == 0) {
+  //     tchPfifo.Install (devices);
+  // } else if (queue_disc_type.compare ("ns3::CoDelQueueDisc") == 0) {
+  //     tchCoDel.Install (devices);
+  // } else {
+  //     NS_FATAL_ERROR ("Queue not recognized. Allowed values are ns3::CoDelQueueDisc or ns3::PfifoFastQueueDisc");
+  // }
+  
 
   NS_LOG_INFO ("Initialize Global Routing.");
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
