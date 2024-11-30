@@ -307,6 +307,10 @@ int main (int argc, char *argv[])
 
   Config::SetDefault ("ns3::TcpL4Protocol::RecoveryType",
                       TypeIdValue (TypeId::LookupByName (recovery)));
+  
+  // Set the default maximum size of the queue
+  // Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", QueueSizeValue(QueueSize("5MB")));
+
   // Select TCP variant
   if (transport_prot.compare ("ns3::TcpWestwoodPlus") == 0)
     { 
@@ -321,6 +325,7 @@ int main (int argc, char *argv[])
       NS_ABORT_MSG_UNLESS (TypeId::LookupByNameFailSafe (transport_prot, &tcpTid), "TypeId " << transport_prot << " not found");
       Config::SetDefault ("ns3::TcpL4Protocol::SocketType", TypeIdValue (TypeId::LookupByName (transport_prot)));
     }
+
 
   // Create gateways, sources, and sinks
   NodeContainer gateways;

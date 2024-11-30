@@ -2,7 +2,9 @@
 
 > PB22081571 薄震宇
 
-## 代码框架解释
+[TOC]
+
+## 1. 代码框架解释
 
 `tcp-variants-comparsion`是一个使用 ns-3 网络模拟器进行 TCP 变体比较的示例。
 
@@ -219,9 +221,9 @@ if (flow_monitor)
 
 最后使用`Simulator::Destroy()`清理和释放模拟器在运行过程中分配的所有资源，然后返回 0。
 
-## assignment1
+## 2. assignment1
 
-### 参数设置
+### 2.1 参数设置
 
 assignment1 只需要修改一些参数以使链路情况满足给出的图片即可：
 
@@ -263,36 +265,87 @@ pcap = true;
 sacp = false;
 ```
 
-### 结果展示
+### 2.2 结果展示
 
-#### TcpNewReno
+下面展示的均为发送端的图像。
 
-##### 吞吐量
+#### 2.2.1 缓冲区队列长度为默认值
+
+##### TcpNewReno
+
+###### 吞吐量
 
 ![new_reno](figs/1_new_reno_throughput.png)
 
-##### RTT
+###### RTT
 
 ![new_reno](figs/1_new_reno_rtt.png)
 
-#### TcpVegas
+##### TcpVegas
 
-##### 吞吐量
+###### 吞吐量
 
 ![vegas](figs/1_vegas_throughput.png)
 
-##### RTT
+###### RTT
 
 ![vegas](figs/1_vegas_rtt.png)
 
-### 结果分析
+#### 2.2.2 缓冲区队列长度为5MB
 
-由图像可得以下几点结论：
+##### TcpNewReno
 
-1. 单流无干扰情况下，TcpNewReno 的平均吞吐量略低于链路带宽，而 TcpVegas 的平均带宽基本保持在链路带宽水平上。
-2. 单流无干扰情况下，TcpNewReno 的平均吞吐量的波动更大，而 TcpVegas 的平均吞吐量几乎无波动。
-3. 单流无干扰情况下，TcpNewReno 的 RTT 的峰值显著大于 TcpVegas。
-4. 单流无干扰情况下，TcpVegas 的 RTT 趋向于稳定波动，而 TcpNewReno 的 RTT 会慢慢增加，直到遇到大幅度丢包。
+###### 吞吐量
+
+![new_reno](figs/1_new_reno_5MB_throughput.png)
+
+###### RTT
+
+![new_reno](figs/1_new_reno_5MB_rtt.png)
+
+##### TcpVegas
+
+###### 吞吐量
+
+![vegas](figs/1_vegas_5MB_throughput.png)
+
+###### RTT
+
+![vegas](figs/1_vegas_5MB_rtt.png)
+
+#### 2.2.3 缓冲区队列长度为1MB
+
+##### TcpNewReno
+
+###### 吞吐量
+
+![new_reno](figs/1_new_reno_1MB_throughput.png)
+
+###### RTT
+
+![new_reno](figs/1_new_reno_1MB_rtt.png)
+
+##### TcpVegas
+
+###### 吞吐量
+
+![vegas](figs/1_vegas_1MB_throughput.png)
+
+###### RTT
+
+![vegas](figs/1_vegas_1MB_rtt.png)
+
+### 2.3 结果分析
+
+根据图像可得以下几点结论：
+
+1. 单流无干扰情况下，TcpNewReno 的平均吞吐量的波动更大，而 TcpVegas 的平均吞吐量几乎无波动。
+2. 单流无干扰情况下，TcpNewReno 的 RTT 的取值范围和峰值都更大，而TcpVegas 稳定在很小的范围。
+3. 单流无干扰情况下，TcpVegas 的 RTT 趋向于稳定波动，而 TcpNewReno 的 RTT 会慢慢增加，直到遇到大幅度丢包。
+
+并且通过对比修改缓冲区队列长度时两个拥塞控制算法对应的图像的变化可以发现，减小缓冲区队列长度时，TcpVegas 的图像基本没有发生改变，而 TcpNewReno 的平均吞吐量和 RTT 的波动性都显著增大。减小缓冲区队列大小时，会加剧网络拥塞，所以我们可以得到下面的第4条结论：
+
+4. TcpVegas 对于拥塞的处理更好，而TcpNewReno 则显著受到拥塞的影响。
 
 **下面根据算法具体的策略来分析出现上述现象的原因：**
 
@@ -308,22 +361,21 @@ sacp = false;
    * TcpVegas 引入了新的拥塞避免机制：Vegas 通过比较实际吞吐量和期望吞吐量来调节拥塞窗口的大小。记$diff = (Expected - Actual)\times BaseRTT$，定义两个阈值$\alpha,\beta$，当$diff < \alpha$时，拥塞窗口减1；当$diff > \beta$时，拥塞窗口加1；其他情况下拥塞窗口不变。
    * TcpVegas 引入了新的慢启动机制：在慢启动过程中增加了拥塞检测。相对来说比 TcpReno 保守了一些，每隔一个 RTT 指数增长一次窗口值。也就是说，每两个 RTT，窗口值翻倍，一个 RTT 是增长，一个 RTT是拥塞检测。如果检测到当前的吞吐量与期望吞吐量之差大于某个阈值$\gamma$ ，那么应该进入线性增长阶段。
 
-根据上面的算法策略我们可以得到，TcpVegas 可以更快地检测到丢包以及时重传丢失的分段，而 TcpNewReno对丢包的检测与 TcpReno 是一样的，也就是说 TcpVegas ”浪费“了更少的时间。因为发生丢包时，拥塞窗口会减小，且超时丢包时拥塞窗口会减为1 MSS，所以丢包的平均吞吐量有很大影响，所以 TcpVegas 的平均吞吐量更大。这说明了第一条结论。
+根据上面的算法策略我们可以得到，TcpVegas 对于拥塞避免的实现更为”谨慎“，在拥塞避免阶段会根据实际吞吐量和期望吞吐量的差值不断地上下调整拥塞窗口，这使 TcpVegas 能够预测拥塞并提前作出调整，此外 TcpVegas 在慢启动过程中也加入了拥塞检测。而 TcpNewReno 主要是在拥塞后的恢复做了改进，在拥塞避免方面与 TcpReno 是一样的，所以 TcpVegas的平均吞吐量和 RTT 的波动都更小。TcpVegas 的 RTT 趋向于稳定波动，而 TcpNewReno 的 RTT 会慢慢增加，直到遇到大幅度丢包。这说明了第 1 条和第 3 条结论。同时也说明了 TcpVegas 可以更好地处理拥塞加剧的情况，而 TcpNewReno 则没有在这一方面做优化，这说明了第4条结论。
 
-此外，TcpVegas 对于拥塞避免的实现更为”谨慎“，在拥塞避免阶段会根据实际吞吐量和期望吞吐量的差值不断地上下调整拥塞窗口，这使 TcpVegas 能够预测拥塞并提前作出调整，此外 TcpVegas 在慢启动过程中也加入了拥塞检测。而 TcpNewReno 主要是在拥塞后的恢复做了改进，在拥塞避免方面与 TcpReno 是一样的，所以 TcpVegas的平均吞吐量和 RTT 的波动都更小。TcpVegas 的 RTT 趋向于稳定波动，而 TcpNewReno 的 RTT 会慢慢增加，直到遇到大幅度丢包。这说明了第二条和第四条结论。
-
-因为 TcpVegas 在慢启动和拥塞避免状态中都使用了更为谨慎的策略，并且使 RTT 保持在很小的波动范围，而TcpNewReno 的 RTT 会慢慢增加，直到遇到大幅度丢包，这导致它的 RTT 可以达到很大的峰值。所以TcpNewReno 的 RTT 峰值大于 TcpVegas。这说明了第三条结论。
+因为 TcpVegas 在慢启动和拥塞避免状态中都使用了更为谨慎的策略，并且使 RTT 保持在很小的波动范围，而TcpNewReno 的 RTT 会慢慢增加，直到遇到大幅度丢包，这导致它的 RTT 可以达到很大的峰值。所以TcpNewReno 的 RTT 峰值大于 TcpVegas。这说明了第 2 条结论。
 
 **所以我们可以总结得到两个算法的区别如下：**
 
-1. TcpNewReno 的拥塞窗口在慢启动阶段指数增长，拥塞避免阶段线性增长。TcpVegas 的拥塞窗口在慢启动阶段指数增长，但是是每过两个 RTT 翻倍，拥塞避免状态根据实际吞吐量和期望吞吐量的差值动态上下调整拥塞窗口以避免拥塞。总体来说 TcpVegas 拥塞窗口增长得更慢，调节更精细，更有效地避免了拥塞。
-2. TcpNewReno 的 RTT 峰值较大且波动显著，这是因为拥塞窗口迅速增长可能导致网络拥塞，导致队列积压和 RTT 增加。又因为拥塞信号依赖丢包，TcpNewReno 往往在链路已经非常拥塞时才会减小窗口，造成更高的 RTT。而 TcpVegas 的 RTT 峰值较小且稳定，这是因为 TcpVegas 通过延迟变化感知链路负载，动态调整窗口以防止拥塞发生，会在检测到 RTT 增大时提前减小窗口，避免队列积压和严重拥塞，从而使 RTT 更加平稳且较低。
+1. **拥塞窗口的变化：**TcpNewReno 的拥塞窗口在慢启动阶段指数增长，拥塞避免阶段线性增长。TcpVegas 的拥塞窗口在慢启动阶段指数增长，但是是每过两个 RTT 翻倍，拥塞避免状态根据实际吞吐量和期望吞吐量的差值动态上下调整拥塞窗口以避免拥塞。总体来说 TcpVegas 拥塞窗口增长得更慢，调节更精细，更有效地避免了拥塞。
+2. **RTT的取值和波动性：**TcpNewReno 的 RTT 峰值较大且波动显著，这是因为拥塞窗口迅速增长可能导致网络拥塞，导致队列积压和 RTT 增加。又因为拥塞信号依赖丢包，TcpNewReno 往往在链路已经非常拥塞时才会减小窗口，造成更高的 RTT，所以其 RTT 会慢慢增加，直到遇到大幅度丢包。而 TcpVegas 的 RTT 峰值较小且稳定，这是因为 TcpVegas 通过延迟变化感知链路负载，动态调整窗口以防止拥塞发生，会在检测到 RTT 增大时提前减小窗口，避免队列积压和严重拥塞，从而使 RTT 更加平稳且较低。
+3. **对于拥塞的处理：** TcpVegas 更有效地应对了拥塞。
 
-最终的结果是单流无干扰情况下，TcpVegas 在拥塞避免方面的实现优于 TcpNewReno ，波动更小，并且TcpVegas可以保持较小的 RTT 和更大的平均吞吐量（多流竞争时则不一定）。
+最终的结果是单流无干扰情况下，TcpVegas 在拥塞避免方面的实现优于 TcpNewReno ，波动更小，并且TcpVegas可以保持更小的 RTT。
 
-## assignment2
+## 3. assignment2
 
-### 参数设置
+### 3.1 参数设置
 
 首先仍然需要修改一些基本参数：
 
@@ -425,7 +477,7 @@ for (uint16_t i = 0; i < sources.GetN (); i++)
 }
 ```
 
-### 结果展示
+### 3.2 结果展示
 
 瓶颈链路是`Node2 ---- Node3`。
 
@@ -438,7 +490,7 @@ for (uint16_t i = 0; i < sources.GetN (); i++)
 
 ![2_vegas](figs/2_vegas.png)
 
-### 结果分析
+### 3.3 结果分析
 
 观察图像可得，在两个拥塞控制算法共存时，TcpNewReno的竞争能力更强，可以占用更高的带宽。下面分析原因：
 
